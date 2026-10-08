@@ -36,7 +36,7 @@ headers = {                                         # 我是谁 + 发什么格�
 }
 
 
-# [V0.2 新增] 消息历史在循环外创建，整个会话共同使用
+# [V0.2 新增] 创建消息历史：在循环外创建，整个会话共同使用
 messages = [
     {
         "role": "system",
@@ -45,7 +45,7 @@ messages = [
 ]
 
 
-# [V0.2 新增] 循环接收输入，实现多轮对话
+# [V0.2 新增] 构造循环：循环接收输入，实现多轮对话
 while True:
 
     # 构造消息
@@ -56,7 +56,7 @@ while True:
     if user_message == "/exit":
         break
     
-    # [V0.2 新增] 把用户消息保存到历史
+    # [V0.2 新增] 保存本轮用户消息到历史
     messages.append(
         {
             "role":"user",
@@ -87,7 +87,7 @@ while True:
     answer = data["choices"][0]["message"]["content"]
     
     
-    # [V0.2 新增] 保存模型回答，供下一轮请求使用
+    # [V0.2 新增] 保存本轮模型回答到历史
     messages.append(
         {
             "role": "assistant",
