@@ -21,6 +21,11 @@ print(f"Model: {model}")
 '''
 https://api.openai.com/v1  +  /chat/completions
         ↑ 服务地址              ↑ 具体接口路径
+
+/embeddings 文本向量化
+/images/generations 画图
+/audio/transcriptions 语音转文字
+/models 列出可用模型
 '''
 url = f"{base_url.rstrip('/')}/chat/completions"    # 发给谁
 
