@@ -72,8 +72,8 @@ Session / Context / Skill / Sandbox / SubAgent ...
 | V0.4 | Agent Loop | 如何持续调用工具直到任务完成？ | ✅ |
 | V0.5 | Tool Registry | 工具变多后如何统一管理？ | ✅ |
 | V0.6 | Mini Coding Agent | 如何让 Agent 读、写、改文件并执行命令？ | ✅ |
-| V0.7 | Session | 程序关闭后如何继续上次对话？ | 🚧 |
-| V0.8 | Context Compaction | 上下文太长时怎么办？ | 🗓️ |
+| V0.7 | Session | 程序关闭后如何继续上次对话？ | ✅ |
+| V0.8 | Context Compaction | 上下文太长时怎么办？ | 🚧 |
 | V0.9 | Skill | 如何按需加载可复用的领域知识？ | 🗓️ |
 | V0.10 | Extension | 如何扩展 Runtime 而不污染核心？ | 🗓️ |
 | V0.11 | Event & Streaming | 如何展示 Agent 的运行过程？ | 🗓️ |
