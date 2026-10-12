@@ -62,7 +62,7 @@ Session / Context / Skill / Sandbox / SubAgent ...
 
 ## 🚦 当前进度
 
-当前已经完成并验收到 **V0.6 — Mini Coding Agent**，正在探索 **V0.7 — Session**。
+当前已经完成并验收到 **V0.8 — Context Compaction**，下一阶段将进入 **V0.9 — Skill**。
 
 | 版本 | 主题 | 这一版要回答的问题 | 状态 |
 | --- | --- | --- | :---: |
@@ -73,7 +73,7 @@ Session / Context / Skill / Sandbox / SubAgent ...
 | V0.5 | Tool Registry | 工具变多后如何统一管理？ | ✅ |
 | V0.6 | Mini Coding Agent | 如何让 Agent 读、写、改文件并执行命令？ | ✅ |
 | V0.7 | Session | 程序关闭后如何继续上次对话？ | ✅ |
-| V0.8 | Context Compaction | 上下文太长时怎么办？ | 🚧 |
+| V0.8 | Context Compaction | 上下文太长时怎么办？ | ✅ |
 | V0.9 | Skill | 如何按需加载可复用的领域知识？ | 🗓️ |
 | V0.10 | Extension | 如何扩展 Runtime 而不污染核心？ | 🗓️ |
 | V0.11 | Event & Streaming | 如何展示 Agent 的运行过程？ | 🗓️ |
@@ -82,9 +82,9 @@ Session / Context / Skill / Sandbox / SubAgent ...
 | V0.14 | Durable Run | Agent 中断后如何恢复执行？ | 🗓️ |
 | V1.0 | micro-pi Core | 如何形成一个完整、可解释的 Agent Core？ | 🗓️ |
 
-> `✅ 已完成` · `🚧 进行中` · `🗓️ 计划中`
+> `✅ 已完成` · `🗓️ 计划中`
 >
-> V0.7 当前仍是开发快照，尚未完成 Session 能力验收。
+> V0.8 已通过测试：完整 Session 保留原始消息，模型 Context 可压缩为 Summary 与最近对话。
 
 ## 🚀 快速开始
 
@@ -158,6 +158,8 @@ python learning-versions/03_v0.3_tool_calling/main.py
 python learning-versions/04_v0.4_agent_loop/main.py
 python learning-versions/05_v0.5_tool_registry/main.py
 python learning-versions/06_v0.6_mini_coding_agent/main.py
+python learning-versions/07_v0.7_session/main.py
+python learning-versions/08_v0.8_context_compaction/main.py
 ~~~
 
 对话版本中输入 `/exit` 可以退出程序。
@@ -227,7 +229,8 @@ while True:
 | V0.4 | [Agent Loop](learning-versions/04_v0.4_agent_loop/main.py) | 外层对话循环与内层 Agent Loop |
 | V0.5 | [Tool Registry](learning-versions/05_v0.5_tool_registry/main.py) | 工具说明与执行函数如何统一注册 |
 | V0.6 | [Mini Coding Agent](learning-versions/06_v0.6_mini_coding_agent/main.py) | `read`、`write`、`edit`、`bash` 的边界 |
-| V0.7 | [Session 开发快照](learning-versions/07_v0.7_session/main.py) | 当前仍待实现持久化与恢复 |
+| V0.7 | [Session](learning-versions/07_v0.7_session/main.py) | JSONL 如何保存消息并在重启后恢复 |
+| V0.8 | [Context Compaction](learning-versions/08_v0.8_context_compaction/main.py) | Session 与 Context 的分离、Summary 与最近消息 |
 
 ## 🧰 V0.6 能做什么？
 
@@ -262,6 +265,54 @@ V0.6 注册了四个 Coding Tools：
 >
 > `read / write / edit` 会限制路径不越出启动程序时的工作目录，但 `bash` 使用系统 Shell 执行模型生成的命令，并不具备完整隔离能力。请只在测试目录、临时项目或其他可恢复环境中学习，不要在包含敏感数据的重要目录中运行，也不要使用高权限账户。
 
+## 🗜️ V0.8 如何压缩 Context？
+
+V0.7 把消息写入 JSONL，解决了“程序关闭后如何继续对话”的问题。但如果每次请求都把完整历史发送给模型，Context 会越来越长，请求成本和模型处理压力也会持续增加。
+
+V0.8 将 **Session** 与 **Context** 分开：
+
+| 概念 | 在 V0.8 中的职责 |
+| --- | --- |
+| Session | 在 `sessions/*.jsonl` 中保存完整、原始的对话历史 |
+| Context | 当前真正发送给模型的消息集合，可以被压缩 |
+| Summary | 由模型总结较早的消息，保留用户事实、决策和未完成任务 |
+| Recent Messages | 最近两轮对话保持原样，避免最新细节在摘要中丢失 |
+
+~~~text
+完整 Session
+    ↓ 复制
+Context
+    ↓ 超过限制
+较早消息 → Summary ─┐
+最近两轮 → 原样保留 ├→ 新 Context → 发送给模型
+固定 System Message ┘
+
+Session：继续保留全部原始消息
+~~~
+
+核心参数位于 V0.8 的 `main.py`：
+
+~~~python
+MAX_CONTEXT_MESSAGES = 8
+RECENT_TURNS = 2
+~~~
+
+为了方便观察效果，教学版在 Context 超过 8 条消息时就触发压缩，并保留最近两个用户回合。当前实现按**消息数量**判断，而不是按精确 Token 数量计算；后续工程化时还需要结合模型的 Context Window 和 Token 预算。
+
+压缩时需要特别观察：
+
+1. `messages` 始终保存完整 Session。
+2. `context_messages` 才是发送给模型的 Context。
+3. 较早消息被合并成一条 Summary，最近两轮保持原样。
+4. Summary 不会写入 Session，因此不会覆盖原始历史。
+5. 模型响应中的 provider-specific `reasoning` 字段不会进入 Session 和 Context。
+
+可以使用新的 `session_path`，连续输入名字、喜好、学习内容和目标等信息；第五轮再让模型复述这些信息。终端出现下面的提示，说明 Compaction 已触发：
+
+~~~text
+Context compacted: 6 messages → 1 summary
+~~~
+
 ## 📁 项目结构
 
 ~~~text
@@ -278,7 +329,9 @@ learn-pi/
 │   ├── 04_v0.4_agent_loop/
 │   ├── 05_v0.5_tool_registry/
 │   ├── 06_v0.6_mini_coding_agent/
-│   └── 07_v0.7_session/
+│   ├── 07_v0.7_session/
+│   └── 08_v0.8_context_compaction/
+├── sessions/                         # 运行后生成，已被 Git 忽略
 ├── src/
 │   └── micro_pi/
 │       └── main.py                  # 主学习工作区，会随开发推进

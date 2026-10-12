@@ -29,4 +29,4 @@
 | `14_v0.14_durable_run` | V0.14 — Durable Run |
 | `15_v1.0_micro_pi_core` | V1.0 — micro-pi Core |
 
-V0.1 已保存当前 `src/micro_pi` 的代码快照，其余目录先保留为空，等待对应版本完成后归档。
+V0.1–V0.8 已保存完整代码快照；V0.9 及后续目录暂时保留为空，等待对应版本完成后归档。
