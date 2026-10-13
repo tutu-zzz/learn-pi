@@ -62,7 +62,7 @@ Session / Context / Skill / Sandbox / SubAgent ...
 
 ## 🚦 当前进度
 
-当前已经完成并验收到 **V0.8 — Context Compaction**，下一阶段将进入 **V0.9 — Skill**。
+当前已经完成并验收到 **V0.11 — Event**，下一阶段将进入 **V0.12 — Sandbox**。Streaming 不影响 Agent 核心能力，作为可选增强保留。
 
 | 版本 | 主题 | 这一版要回答的问题 | 状态 |
 | --- | --- | --- | :---: |
@@ -75,8 +75,8 @@ Session / Context / Skill / Sandbox / SubAgent ...
 | V0.7 | Session | 程序关闭后如何继续上次对话？ | ✅ |
 | V0.8 | Context Compaction | 上下文太长时怎么办？ | ✅ |
 | V0.9 | Skill | 如何按需加载可复用的领域知识？ | ✅ |
-| V0.10 | Extension | 如何扩展 Runtime 而不污染核心？ | 🗓️ |
-| V0.11 | Event & Streaming | 如何展示 Agent 的运行过程？ | 🗓️ |
+| V0.10 | Extension | 如何扩展 Runtime 而不污染核心？ | ✅ |
+| V0.11 | Event（Streaming 可选） | 如何解耦 Agent Runtime 与终端展示？ | ✅ |
 | V0.12 | Sandbox | 如何限制工具执行的风险？ | 🗓️ |
 | V0.13 | SubAgent | 如何把任务拆给多个 Agent？ | 🗓️ |
 | V0.14 | Durable Run | Agent 中断后如何恢复执行？ | 🗓️ |
@@ -84,7 +84,7 @@ Session / Context / Skill / Sandbox / SubAgent ...
 
 > `✅ 已完成` · `🗓️ 计划中`
 >
-> V0.8 已通过测试：完整 Session 保留原始消息，模型 Context 可压缩为 Summary 与最近对话。
+> V0.11 已通过测试：Agent Runtime 发送结构化 Event，Renderer 独立负责终端展示。
 
 ## 🚀 快速开始
 
@@ -231,6 +231,9 @@ while True:
 | V0.6 | [Mini Coding Agent](learning-versions/06_v0.6_mini_coding_agent/main.py) | `read`、`write`、`edit`、`bash` 的边界 |
 | V0.7 | [Session](learning-versions/07_v0.7_session/main.py) | JSONL 如何保存消息并在重启后恢复 |
 | V0.8 | [Context Compaction](learning-versions/08_v0.8_context_compaction/main.py) | Session 与 Context 的分离、Summary 与最近消息 |
+| V0.9 | [Skill](learning-versions/09_v0.9_skill/main.py) | Skill 元数据发现与完整指令按需读取 |
+| V0.10 | [Extension](learning-versions/10_v0.10_extension/main.py) | 外部模块如何通过 ExtensionAPI 注册 Tool |
+| V0.11 | [Event](learning-versions/11_v0.11_event_and_streaming/main.py) | Runtime Event 与终端 Renderer 如何解耦 |
 
 ## 🧰 V0.6 能做什么？
 

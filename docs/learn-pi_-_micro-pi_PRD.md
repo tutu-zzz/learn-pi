@@ -1605,7 +1605,7 @@ Extensions
 
 ---
 
-# 34. V0.11 — Event & Streaming
+# 34. V0.11 — Event（Streaming 可选）
 
 ## 当前问题
 
@@ -1636,7 +1636,6 @@ CLI 和 Runtime 会严重耦合。
 ```text
 agent_start
 model_start
-model_delta
 tool_start
 tool_end
 agent_end
@@ -1663,11 +1662,26 @@ Terminal
 
 ```text
 Event
-Streaming
 Runtime State
 Observer
 Presentation Layer
 ```
+
+---
+
+## 可选增强：Streaming
+
+Streaming 只改变模型回答的展示方式，不影响 Tool Calling、Agent Loop、Session 和最终任务结果。
+
+`micro-pi` 核心版本默认保留非流式模型调用，避免在 `call_model()` 中引入 SSE 解析和 Tool Call 分片重组。需要更实时的终端体验时，可以由 Provider 持续发送：
+
+```text
+model_start
+model_delta
+model_end
+```
+
+现有 Event 与 Renderer 结构可以直接承接这些事件，无需重写 Agent Core。
 
 ---
 
