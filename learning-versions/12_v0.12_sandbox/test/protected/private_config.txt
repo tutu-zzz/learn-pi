@@ -1,0 +1,6 @@
+# Sandbox lesson: simulated private file
+
+This file represents protected private data.
+It contains no real credentials or personal information.
+
+FAKE_PRIVATE_VALUE=do-not-delete
