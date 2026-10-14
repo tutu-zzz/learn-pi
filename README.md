@@ -62,7 +62,7 @@ Session / Context / Skill / Extension / Event ...
 
 ## 🚦 当前进度
 
-当前已经完成并验收到 **V0.11 — Event**，下一阶段将进入 **V0.12 — Sandbox**。Streaming 不影响 Agent 核心能力，暂时作为可选增强保留。
+当前已经完成并验收到 **V0.12 — Sandbox**，下一阶段将进入 **V0.13 — SubAgent**。Streaming 不影响 Agent 核心能力，暂时作为可选增强保留。
 
 | 版本 | 主题 | 状态 |
 | --- | --- | :---: |
@@ -77,7 +77,7 @@ Session / Context / Skill / Extension / Event ...
 | V0.9 | Skill | ✅ |
 | V0.10 | Extension | ✅ |
 | V0.11 | Event（Streaming 可选） | ✅ |
-| V0.12 | Sandbox | 🗓️ |
+| V0.12 | Sandbox | ✅ |
 | V0.13 | SubAgent | 🗓️ |
 | V0.14 | Durable Run | 🗓️ |
 | V1.0 | micro-pi Core | 🗓️ |
@@ -88,7 +88,7 @@ Session / Context / Skill / Extension / Event ...
 
 每个已完成版本的目标、流程、运行方法和观察重点已集中整理：
 
-> **[查看 V0.1–V0.11 版本详细说明 →](learning-versions/README.md)**
+> **[查看 V0.1–V0.12 版本详细说明 →](learning-versions/README.md)**
 
 ## 🚀 快速开始
 
@@ -159,7 +159,7 @@ Answer: ...
 如果希望体验当前最新的完整版本：
 
 ~~~bash
-python learning-versions/11_v0.11_event_and_streaming/main.py
+python learning-versions/12_v0.12_sandbox/main.py
 ~~~
 
 对话中输入 `/exit` 可以退出程序。其余版本的运行方式与学习重点请查看[版本学习指南](learning-versions/README.md)。
@@ -249,7 +249,13 @@ learn-pi/
 │   │   ├── renderer.py
 │   │   ├── extensions/word_count.py
 │   │   └── skills/code-review/SKILL.md
-│   ├── 12_v0.12_sandbox/             # 计划中
+│   ├── 12_v0.12_sandbox/
+│   │   ├── main.py
+│   │   ├── sandbox.py
+│   │   ├── renderer.py
+│   │   ├── extensions/word_count.py
+│   │   ├── skills/code-review/SKILL.md
+│   │   └── test/                     # Sandbox 对比实验文件
 │   ├── 13_v0.13_subagent/            # 计划中
 │   ├── 14_v0.14_durable_run/         # 计划中
 │   ├── 15_v1.0_micro_pi_core/        # 计划中
