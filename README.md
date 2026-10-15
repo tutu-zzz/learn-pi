@@ -232,17 +232,19 @@ learn-pi/
 │   ├── learn-pi_-_micro-pi_PRD.md
 │   └── 进度.md
 ├── learning-versions/
-│   ├── 01_v0.1_first_llm_call/
-│   ├── 02_v0.2_conversation/
-│   ├── 03_v0.3_tool_calling/
-│   ├── 04_v0.4_agent_loop/
-│   ├── 05_v0.5_tool_registry/
-│   ├── 06_v0.6_mini_coding_agent/
-│   ├── 07_v0.7_session/
-│   ├── 08_v0.8_context_compaction/
+│   ├── 01_v0.1_first_llm_call/main.py
+│   ├── 02_v0.2_conversation/main.py
+│   ├── 03_v0.3_tool_calling/main.py
+│   ├── 04_v0.4_agent_loop/main.py
+│   ├── 05_v0.5_tool_registry/main.py
+│   ├── 06_v0.6_mini_coding_agent/main.py
+│   ├── 07_v0.7_session/main.py
+│   ├── 08_v0.8_context_compaction/main.py
 │   ├── 09_v0.9_skill/
+│   │   ├── main.py
 │   │   └── skills/code-review/SKILL.md
 │   ├── 10_v0.10_extension/
+│   │   ├── main.py
 │   │   ├── extensions/word_count.py
 │   │   └── skills/code-review/SKILL.md
 │   ├── 11_v0.11_event_and_streaming/
@@ -256,22 +258,26 @@ learn-pi/
 │   │   ├── renderer.py
 │   │   ├── extensions/word_count.py
 │   │   ├── skills/code-review/SKILL.md
-│   │   └── test/                     # Sandbox 对比实验文件
+│   │   └── test/                     # 仅用于 Sandbox 对比实验
+│   │       ├── protected/private_config.txt
+│   │       └── backup/private_config.backup.txt
 │   ├── 13_v0.13_subagent/
-│   │   ├── main.py                   # Parent Agent 与委托工具
-│   │   ├── subagent.py               # Child Agent 独立循环与 Session
+│   │   ├── main.py                   # Parent Agent、Registry 与委托工具
+│   │   ├── subagent.py               # Child Agent Loop 与独立 Session
 │   │   ├── sandbox.py
 │   │   ├── renderer.py
 │   │   ├── extensions/word_count.py
 │   │   └── skills/code-review/SKILL.md
 │   ├── 14_v0.14_durable_run/         # 计划中
 │   ├── 15_v1.0_micro_pi_core/        # 计划中
-│   └── README.md                     # 可折叠版本学习指南
+│   └── README.md                     # V0.1–V0.13 可折叠教程
 ├── sessions/                         # 运行时生成，已被 Git 忽略
 ├── src/
 │   └── micro_pi/
 │       └── main.py                   # 主学习工作区
 ├── .env.example
+├── .gitignore
+├── LICENSE
 ├── requirements.txt
 └── README.md
 ~~~
