@@ -6,7 +6,7 @@
 
 ## 如何使用
 
-1. 展开当前版本，先阅读开头的**完整系统运转流程**。
+1. 展开当前版本，先看**宏观流程概览**建立整体认识，再按需阅读后面的**详细系统流程**。
 2. 先理解“上一版的问题”，再阅读本版的解决方法。
 3. 按“动手改造”的顺序修改代码，不要直接复制最终文件。
 4. 完成运行与验收后，再打开完整代码快照进行核对。
@@ -19,7 +19,11 @@
 <details>
 <summary><strong>📌 V0.1 — First LLM Call：一次模型请求发生了什么？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.1 First LLM Call 宏观流程图](assets/v0.1-first-llm-call.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -142,7 +146,11 @@ python learning-versions/01_v0.1_first_llm_call/main.py
 <details>
 <summary><strong>📌 V0.2 — Conversation：模型为什么能记住前文？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.2 Conversation 宏观流程图](assets/v0.2-conversation.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -282,7 +290,11 @@ python learning-versions/02_v0.2_conversation/main.py
 <details>
 <summary><strong>📌 V0.3 — Tool Calling：模型如何提出工具请求？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.3 Tool Calling 宏观流程图](assets/v0.3-tool-calling.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -450,7 +462,11 @@ python learning-versions/03_v0.3_tool_calling/main.py
 <details>
 <summary><strong>📌 V0.4 — Agent Loop：Agent 为什么需要循环？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.4 Agent Loop 宏观流程图](assets/v0.4-agent-loop.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -579,7 +595,11 @@ python learning-versions/04_v0.4_agent_loop/main.py
 <details>
 <summary><strong>📌 V0.5 — Tool Registry：工具多了以后如何管理？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.5 Tool Registry 宏观流程图](assets/v0.5-tool-registry.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -736,7 +756,11 @@ python learning-versions/05_v0.5_tool_registry/main.py
 <details>
 <summary><strong>📌 V0.6 — Mini Coding Agent：如何真正操作项目？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.6 Mini Coding Agent 宏观流程图](assets/v0.6-mini-coding-agent.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -952,7 +976,11 @@ python learning-versions/06_v0.6_mini_coding_agent/main.py
 <details>
 <summary><strong>📌 V0.7 — Session：程序重启后如何继续对话？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.7 Session 宏观流程图](assets/v0.7-session.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -1132,7 +1160,11 @@ python learning-versions/07_v0.7_session/main.py
 <details>
 <summary><strong>📌 V0.8 — Context Compaction：如何控制不断增长的上下文？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.8 Context Compaction 宏观流程图](assets/v0.8-context-compaction.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -1357,7 +1389,11 @@ Context compacted: 6 messages → 1 summary
 <details>
 <summary><strong>📌 V0.9 — Skill：如何按需加载专业操作指南？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.9 Skill 宏观流程图](assets/v0.9-skill.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -1574,7 +1610,11 @@ python learning-versions/09_v0.9_skill/main.py
 <details>
 <summary><strong>📌 V0.10 — Extension：如何在不修改主循环的情况下增加工具？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.10 Extension 宏观流程图](assets/v0.10-extension.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -1802,7 +1842,11 @@ python learning-versions/10_v0.10_extension/main.py
 <details>
 <summary><strong>📌 V0.11 — Event：如何让运行时与终端展示解耦？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.11 Event and Streaming 宏观流程图](assets/v0.11-event-and-streaming.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -2037,7 +2081,11 @@ python learning-versions/11_v0.11_event_and_streaming/main.py
 <details>
 <summary><strong>📌 V0.12 — Sandbox：如何在真实执行前拦截高风险工具？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.12 Sandbox 宏观流程图](assets/v0.12-sandbox.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD
@@ -2256,7 +2304,11 @@ python learning-versions/12_v0.12_sandbox/main.py
 <details>
 <summary><strong>📌 V0.13 — SubAgent：一个 Agent 不够时如何安全委托？</strong></summary>
 
-**完整系统运转流程**
+**宏观流程概览**
+
+![V0.13 SubAgent 宏观流程图](assets/v0.13-subagent.png)
+
+**完整系统运转流程（详细）**
 
 ~~~mermaid
 flowchart TD

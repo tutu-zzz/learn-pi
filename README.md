@@ -232,6 +232,7 @@ learn-pi/
 │   ├── learn-pi_-_micro-pi_PRD.md
 │   └── 进度.md
 ├── learning-versions/
+│   ├── assets/                       # V0.1–V0.13 宏观流程图
 │   ├── 01_v0.1_first_llm_call/main.py
 │   ├── 02_v0.2_conversation/main.py
 │   ├── 03_v0.3_tool_calling/main.py
