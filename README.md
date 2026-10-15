@@ -35,7 +35,7 @@ Tool Registry
     ↓
 Coding Agent
     ↓
-Session / Context / Skill / Extension / Event ...
+Session / Context / Skill / Extension / Event / Sandbox / SubAgent
 ~~~
 
 > 这个项目的目标不是“再造一个完整的 Pi”，而是借鉴 Pi 的极简思想，把 Agent 的核心机制一层一层拆开。
@@ -62,7 +62,7 @@ Session / Context / Skill / Extension / Event ...
 
 ## 🚦 当前进度
 
-当前已经完成并验收到 **V0.12 — Sandbox**，下一阶段将进入 **V0.13 — SubAgent**。Streaming 不影响 Agent 核心能力，暂时作为可选增强保留。
+当前已经完成并验收到 **V0.13 — SubAgent**，下一阶段将进入 **V0.14 — Durable Run**。Streaming 不影响 Agent 核心能力，暂时作为可选增强保留。
 
 | 版本 | 主题 | 状态 |
 | --- | --- | :---: |
@@ -78,7 +78,7 @@ Session / Context / Skill / Extension / Event ...
 | V0.10 | Extension | ✅ |
 | V0.11 | Event（Streaming 可选） | ✅ |
 | V0.12 | Sandbox | ✅ |
-| V0.13 | SubAgent | 🗓️ |
+| V0.13 | SubAgent | ✅ |
 | V0.14 | Durable Run | 🗓️ |
 | V1.0 | micro-pi Core | 🗓️ |
 
@@ -88,7 +88,7 @@ Session / Context / Skill / Extension / Event ...
 
 每个已完成版本的目标、流程、运行方法和观察重点已集中整理：
 
-> **[查看 V0.1–V0.12 版本详细说明 →](learning-versions/README.md)**
+> **[查看 V0.1–V0.13 版本详细说明 →](learning-versions/README.md)**
 
 ## 🚀 快速开始
 
@@ -159,7 +159,7 @@ Answer: ...
 如果希望体验当前最新的完整版本：
 
 ~~~bash
-python learning-versions/12_v0.12_sandbox/main.py
+python learning-versions/13_v0.13_subagent/main.py
 ~~~
 
 对话中输入 `/exit` 可以退出程序。其余版本的运行方式与学习重点请查看[版本学习指南](learning-versions/README.md)。
@@ -184,6 +184,7 @@ flowchart LR
 2. **Python Runtime 才是真正的执行者。** 它解析参数、调用函数并得到结果。
 3. **工具结果需要返回给模型。** 模型拿到真实结果后，才能决定继续调用工具还是给出最终回答。
 4. **Agent Loop 负责重复这个过程。** 直到模型不再请求工具，本轮任务才结束。
+5. **SubAgent 也是受控的工具调用。** V0.13 中 Parent 通过委托工具启动独立 Child；Child 使用自己的 Messages、Session 和只读工具，结果再作为 Tool Result 返回 Parent。
 
 最小逻辑可以理解为：
 
@@ -256,7 +257,13 @@ learn-pi/
 │   │   ├── extensions/word_count.py
 │   │   ├── skills/code-review/SKILL.md
 │   │   └── test/                     # Sandbox 对比实验文件
-│   ├── 13_v0.13_subagent/            # 计划中
+│   ├── 13_v0.13_subagent/
+│   │   ├── main.py                   # Parent Agent 与委托工具
+│   │   ├── subagent.py               # Child Agent 独立循环与 Session
+│   │   ├── sandbox.py
+│   │   ├── renderer.py
+│   │   ├── extensions/word_count.py
+│   │   └── skills/code-review/SKILL.md
 │   ├── 14_v0.14_durable_run/         # 计划中
 │   ├── 15_v1.0_micro_pi_core/        # 计划中
 │   └── README.md                     # 可折叠版本学习指南

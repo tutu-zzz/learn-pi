@@ -1733,41 +1733,115 @@ Permission Boundary
 
 ## 当前问题
 
-复杂任务可能同时需要：
+V0.12 已经能限制单个 Agent 的工具权限，但复杂任务仍由同一个 Agent、同一份 Context 完成。例如，解释两个版本的差异时同时需要：
 
 ```text
-Explore
-Coding
-Testing
-Review
+梳理单个文件的执行流程
+        +
+比较多个版本的实现差异
+        +
+组合最终结论
 ```
 
-是否可以把部分任务委托给其他 Agent？
+如果所有中间阅读结果都进入 Parent Context，职责会混在一起，消息也会更快增长。系统需要能够把边界清晰的子任务交给专业 Child，同时保留可观察、可限制的执行过程。
 
 ---
 
 ## 引入 SubAgent
 
+V0.13 将 SubAgent 暴露为 Parent 可以自主选择的普通 Tool：
+
 ```text
-Main Agent
-   │
-   ├── Explore Agent
-   ├── Test Agent
-   └── Review Agent
+用户任务
+  ↓
+Parent Agent
+  ├─ delegate_explorer
+  │    ↓
+  │  Explorer Child
+  │  独立 Messages + 独立 Session + read-only Tool
+  │    ↓
+  │  箭头流程图
+  │
+  └─ delegate_comparator
+       ↓
+     Comparator Child
+     独立 Messages + 独立 Session + read-only Tool
+       ↓
+     Markdown 对比表
+
+两个 Child Result
+  ↓
+作为 Tool Result 返回 Parent
+  ↓
+Parent 组合最终回答
 ```
 
 ---
 
-## 核心概念
+## 运行边界
 
-学习：
+| 角色 | Context | Session | 可用工具 | 输出 |
+|---|---|---|---|---|
+| Parent | 可压缩的 Parent Context | `session-011-parent.jsonl` | Sandbox 白名单中的核心、Extension 与委托工具 | 组合后的最终回答 |
+| Explorer | 每次委托新建独立 Messages | `session-011-explorer.jsonl` | 仅 `read` | 箭头流程图 |
+| Comparator | 每次委托新建独立 Messages | `session-011-comparator.jsonl` | 仅 `read` | Markdown 对比表 |
+
+Child 的 JSONL Session 用于保留完整执行轨迹；当前版本不会在下一次委托时把旧 Child Session 恢复为运行 Context。
+
+---
+
+## 完整执行链路
+
+```text
+Parent LLM
+  → 生成 delegate Tool Call
+  → Tool Registry 查找委托工具
+  → Parent Sandbox 检查
+  → delegate_task 筛选 read Tool Schema
+  → run_subagent 创建独立 Messages
+  → Child LLM
+      → read Tool Call
+      → Runtime 读取文件
+      → Tool Result 回到 Child
+      → Child Final Result
+  → Child Result 作为 Parent Tool Result
+  → 写入 Parent Session 与 Context
+  → Parent LLM 继续组合答案
+```
+
+委托沿用现有的 Registry、Sandbox、Agent Loop、Tool Result、Event 和 Renderer，不新增无法观察的隐藏执行通道。
+
+---
+
+## 已验收范围
+
+- Parent 根据任务自主选择 Explorer、Comparator 或普通工具。
+- Explorer 能读取目标文件并生成箭头流程图。
+- Comparator 能读取多个版本并生成 Markdown 对比表。
+- Parent、Explorer、Comparator 分别保存消息。
+- Child 只获得 `read` Tool Schema，Runtime 也会拒绝非 `read` Tool Call。
+- Parent 能接收两个 Child Result 并组合最终回答。
+
+---
+
+## 暂不包含
+
+- 两个 Child 当前按 Parent Tool Call 顺序执行，不包含真正的并发或并行调度。
+- 不包含 Child Session 自动恢复、跨进程 Worker、任务队列和失败重试。
+- Durable Run 留到 V0.14。
+
+---
+
+## 核心概念
 
 ```text
 Delegation
 Parent Agent
 Child Agent
 Context Isolation
-Parallel Execution
+Session Isolation
+Tool Restriction
+Result Composition
 ```
 
 ---
