@@ -8,3 +8,7 @@ __pycache__/
 
 # Runtime session data
 /sessions/
+
+# Durable run state
+/runs/
+/learning-versions/14_v0.14_durable_run/test/*.flag

@@ -1850,62 +1850,158 @@ Result Composition
 
 ## 当前问题
 
-Agent 执行长任务：
+Session 可以恢复历史消息，但不能说明一次任务是否已经完成。Agent 在 Tool Call 产生后、Tool Result 返回前崩溃时，Session 会停在不完整的消息链：
 
 ```text
-运行到一半
- ↓
-进程崩溃
+user
+  → assistant(tool_call)
+  → 进程崩溃
+  → 缺少 tool(result)
 ```
 
-是否必须完全重新开始？
+重新启动后，如果 Runtime 只加载 Session 并等待新的用户输入，用户只能重新提交任务，模型也会生成新的 Tool Call。这属于重新执行，不是恢复原任务。
 
 ---
 
-## 引入
+## Session 与 Checkpoint
+
+| 数据 | 作用 | 文件形式 |
+|---|---|---|
+| Session | 追加保存已经发生的消息 | JSONL |
+| Checkpoint | 覆盖保存当前 Run 停在哪里、下一步做什么 | JSON |
+
+V0.14 的最小 Checkpoint：
+
+```json
+{
+  "status": "WAITING_TOOL",
+  "tool_calls": [
+    {
+      "id": "call-xxx",
+      "type": "function",
+      "function": {
+        "name": "word_count",
+        "arguments": "{\"text\": \"durable run needs recovery\"}"
+      }
+    }
+  ]
+}
+```
+
+Checkpoint 中的 Tool Call ID 与 Session 中未完成的 Assistant Tool Call ID 保持一致。
+
+---
+
+## 最小状态机
+
+当前教学实现只引入三个状态：
+
+| 状态 | 含义 | 下一步 |
+|---|---|---|
+| `RUNNING` | Run 正在执行，没有待执行 Tool Call | 调用模型 |
+| `WAITING_TOOL` | 模型已经生成 Tool Call | 执行保存的 Tool Call |
+| `SUCCEEDED` | 模型已经返回最终回答 | 不再恢复 |
+
+正常流程：
 
 ```text
-Run
-Attempt
+RUNNING
+  → WAITING_TOOL
+  → RUNNING
+  → SUCCEEDED
+```
+
+崩溃恢复：
+
+```text
+RUNNING
+  → WAITING_TOOL
+  → 进程崩溃
+  → 重新启动
+  → 读取 WAITING_TOOL
+  → 恢复原 Tool Call
+  → RUNNING
+  → SUCCEEDED
+```
+
+程序突然崩溃时无法主动写入 `FAILED`，因此 Checkpoint 保留崩溃前最后一次成功保存的状态。启动时只要发现 `RUNNING` 或 `WAITING_TOOL`，就认为存在未完成 Run。
+
+---
+
+## 对比实验
+
+第一次运行在工具真正执行前主动抛出一次测试异常：
+
+```text
+用户输入
+  → Checkpoint = RUNNING
+  → 模型生成 word_count Tool Call
+  → Session 保存 Assistant Tool Call
+  → Checkpoint = WAITING_TOOL
+  → 创建一次性崩溃标记
+  → RuntimeError
+```
+
+第二次启动不接收新的用户输入，而是优先恢复 Checkpoint：
+
+```text
+加载 Session：2 条消息
+  → 加载 Checkpoint：WAITING_TOOL
+  → 跳过 input
+  → 跳过模型调用
+  → 执行原 word_count Tool Call
+  → 使用原 Tool Call ID 保存 Tool Result
+  → Checkpoint = RUNNING
+  → 再次调用模型
+  → 保存 Final Answer
+  → Checkpoint = SUCCEEDED
+```
+
+最终消息链：
+
+```text
+user
+  → assistant(tool_call A)
+  → 程序崩溃并重新启动
+  → tool(result for A)
+  → assistant(final answer)
+```
+
+Tool Result 对应原来的 Tool Call A，没有重复 User Message，也没有重新生成 Tool Call。
+
+---
+
+## 已验收范围
+
+- 使用独立 JSON 文件覆盖保存当前 Run Checkpoint。
+- 新任务开始时保存 `RUNNING`。
+- 模型生成 Tool Call 后保存 `WAITING_TOOL` 和完整 Tool Call。
+- 启动时识别 `RUNNING`、`WAITING_TOOL` 并优先恢复，不等待用户重新输入。
+- `WAITING_TOOL` 直接执行原 Tool Call，保留原 `tool_call_id`。
+- Tool Result 保存后切回 `RUNNING`，继续调用模型。
+- 模型返回最终回答后保存 `SUCCEEDED`。
+- 保留原有外层输入循环和内层 Agent Loop。
+
+---
+
+## 暂不包含
+
+- 不包含自动 Retry、退避策略、Heartbeat、跨进程 Worker 和任务队列。
+- 不包含工具副作用的 Idempotency Key 和 Exactly-once 保证。
+- 单次模型返回多个 Tool Call 时，暂未为每个工具分别保存完成进度。
+- 当前只恢复 Parent Run，不恢复 Child Agent 的未完成执行。
+- 一次性崩溃标记仅用于教学实验，不属于正式 Checkpoint 数据。
+
+---
+
+## 核心概念
+
+```text
+Run State
 Checkpoint
-Retry
 Resume
-Heartbeat
-Idempotency
-```
-
-状态：
-
-```text
-PENDING
- ↓
-RUNNING
- ↓
-WAITING_TOOL
- ↓
-RUNNING
- ↓
-SUCCEEDED
-```
-
-异常：
-
-```text
-RUNNING
- ↓
-FAILED
- ↓
-RETRY
- ↓
-RECOVERING
- ↓
-RUNNING
-```
-
-这一阶段开始进入：
-
-```text
-Production Agent Runtime
+Pending Tool Call
+State Transition
 ```
 
 ---

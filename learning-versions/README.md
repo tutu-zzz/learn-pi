@@ -12,7 +12,7 @@
 4. 完成运行与验收后，再打开完整代码快照进行核对。
 5. 代码中的 `[V0.x 新增]` 和 `[V0.x 修改]` 注释也可以帮助定位差异。
 
-> V0.1–V0.13 已完成并通过测试。所有命令均从项目根目录运行，对话版本输入 `/exit` 可以结束程序。
+> V0.1–V0.14 已完成并通过测试。所有命令均从项目根目录运行，对话版本输入 `/exit` 可以结束程序。
 
 ## 已完成版本
 
@@ -2762,11 +2762,645 @@ python learning-versions/13_v0.13_subagent/main.py
 
 </details>
 
+<details>
+<summary><strong>📌 V0.14 — Durable Run：Agent 崩溃后如何继续？</strong></summary>
+
+**宏观流程概览**
+
+~~~mermaid
+flowchart TD
+    A["用户提交任务"] --> B["Checkpoint = RUNNING（本版新增）"]
+    B --> C["LLM 生成 Tool Call"]
+    C --> D["Assistant Tool Call 写入 Session"]
+    D --> E["Checkpoint = WAITING_TOOL（本版新增）"]
+    E --> F["工具执行前模拟进程崩溃"]
+    F --> G["重新启动程序"]
+    G --> H["加载 Session：恢复消息"]
+    H --> I["加载 Checkpoint：恢复执行位置（本版新增）"]
+    I --> J["跳过用户输入"]
+    J --> K["跳过重复模型调用"]
+    K --> L["执行原 Tool Call"]
+    L --> M["使用原 tool_call_id 保存 Tool Result"]
+    M --> N["Checkpoint = RUNNING"]
+    N --> O["LLM 根据 Tool Result 生成最终回答"]
+    O --> P["Checkpoint = SUCCEEDED"]
+~~~
+
+**上一版已经完成什么**
+
+V0.13 已经可以保存 Parent 与 Child Session。程序重新启动后能恢复历史消息，但只知道“之前发生过什么”，不知道“一次任务是否已经完成、接下来应该执行什么”。
+
+**引入问题**
+
+当模型已经生成 Tool Call、工具还没有执行时进程崩溃，Session 会停在：
+
+~~~text
+user
+  → assistant(tool_call)
+  → 进程崩溃
+  → 缺少 tool(result)
+~~~
+
+如果重启后只恢复 Session，Runtime 会重新等待输入。用户再次提交相同任务时，模型会生成新的 Tool Call；这属于重新执行，不是恢复原任务。
+
+**本版目标**
+
+~~~text
+第二次启动
+  → 不重新输入任务
+  → 不重新生成 Tool Call
+  → 执行崩溃前保存的原 Tool Call
+  → 使用相同 tool_call_id 保存 Tool Result
+  → 继续得到最终回答
+~~~
+
+**Session、Checkpoint 与 Resume**
+
+| 机制 | 回答的问题 | 文件 |
+|---|---|---|
+| Session | 已经发生过哪些消息？ | 追加式 JSONL |
+| Checkpoint | 当前 Run 停在哪里？ | 覆盖式 JSON |
+| Resume | 重新启动后下一步做什么？ | Runtime 启动逻辑 |
+
+**最小状态机**
+
+| 状态 | 含义 | 下一步 |
+|---|---|---|
+| `RUNNING` | 当前没有待执行 Tool Call | 调用模型 |
+| `WAITING_TOOL` | Tool Call 已产生但尚未完成 | 执行保存的工具调用 |
+| `SUCCEEDED` | 最终回答已经生成 | 不再恢复 |
+
+~~~text
+RUNNING
+  → WAITING_TOOL
+  → RUNNING
+  → SUCCEEDED
+~~~
+
+**步骤 1：增加 Checkpoint 存档与读档**
+
+**新建文件**：`14_v0.14_durable_run/durable.py`
+
+~~~python
+import json
+
+
+def save_checkpoint(path, status, tool_calls=None):
+    checkpoint = {
+        "status": status,
+        "tool_calls": tool_calls or [],
+    }
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(checkpoint, ensure_ascii=False, indent=4),
+        encoding="utf-8",
+    )
+
+
+def load_checkpoint(path):
+    if not path.exists():
+        return None
+
+    return json.loads(path.read_text(encoding="utf-8"))
+~~~
+
+Session 需要保留每条消息，所以使用 JSONL 追加写入；Checkpoint 只需要当前状态，所以每次覆盖同一个 JSON 文件。
+
+**步骤 2：配置 Checkpoint 与一次性崩溃标记**
+
+~~~python
+from durable import load_checkpoint, save_checkpoint
+
+
+checkpoint_path = Path("runs/run-012.json")
+
+crash_flag_path = (
+    Path(__file__).resolve().parent
+    / "test"
+    / "crash_once.flag"
+)
+~~~
+
+`crash_once.flag` 只负责保证教学实验仅崩溃一次，不属于 Durable Run 的正式状态。
+
+**步骤 3：启动时识别未完成 Run**
+
+~~~python
+checkpoint = load_checkpoint(checkpoint_path)
+
+resume_run = bool(
+    checkpoint
+    and checkpoint.get("status") in (
+        "RUNNING",
+        "WAITING_TOOL",
+    )
+)
+
+pending_tool_calls = (
+    checkpoint["tool_calls"]
+    if resume_run and checkpoint["status"] == "WAITING_TOOL"
+    else None
+)
+~~~
+
+`RUNNING` 表示下一步重新调用模型；`WAITING_TOOL` 表示下一步直接执行 Checkpoint 中保存的 Tool Call；`SUCCEEDED` 不需要恢复。
+
+**步骤 4：保留双层循环并增加 Resume 分支**
+
+外层循环继续负责“接收新任务或恢复旧任务”：
+
+~~~python
+while True:
+    if resume_run:
+        print(f"Run resumed: {checkpoint['status']}")
+        tool_calls = pending_tool_calls
+        resume_run = False
+    else:
+        user_message = input("> ")
+
+        if user_message == "/exit":
+            break
+
+        add_message(
+            {
+                "role": "user",
+                "content": user_message,
+            }
+        )
+
+        save_checkpoint(checkpoint_path, "RUNNING")
+        tool_calls = None
+~~~
+
+内层循环继续负责模型与工具交互：
+
+~~~python
+    while True:
+        if tool_calls is None:
+            compact_context()
+
+            assistant_message = call_model(context_messages)
+            add_message(assistant_message)
+
+            tool_calls = assistant_message.get("tool_calls")
+
+            if not tool_calls:
+                save_checkpoint(checkpoint_path, "SUCCEEDED")
+                emit("agent_end", answer=assistant_message["content"])
+                break
+
+            save_checkpoint(
+                checkpoint_path,
+                "WAITING_TOOL",
+                tool_calls,
+            )
+
+        # 原有 for tool_call in tool_calls 执行逻辑保持不变
+
+        save_checkpoint(checkpoint_path, "RUNNING")
+        tool_calls = None
+~~~
+
+这里两个判断的职责不同：
+
+~~~text
+if tool_calls is None
+  → 当前没有现成 Tool Call，需要调用模型
+
+if not tool_calls
+  → 模型调用完成后没有请求工具，本次 Run 已完成
+~~~
+
+工具执行完成后设置 `tool_calls = None`，表示下一轮应该重新调用模型；如果不清空，内层循环会重复执行原来的 Tool Call。
+
+**步骤 5：第一次运行，制造崩溃**
+
+运行：
+
+~~~powershell
+python learning-versions\14_v0.14_durable_run\main.py
+~~~
+
+输入：
+
+~~~text
+请只调用 word_count 工具统计：durable run needs recovery
+~~~
+
+在 Tool Call 已保存、工具尚未执行的位置模拟一次崩溃：
+
+~~~python
+if not crash_flag_path.exists():
+    crash_flag_path.parent.mkdir(parents=True, exist_ok=True)
+    crash_flag_path.write_text("crash once", encoding="utf-8")
+    raise RuntimeError("Simulated crash before Tool Result")
+~~~
+
+第一次运行结束时，Session 只有两条消息：
+
+~~~text
+#1 user
+#2 assistant(tool_call A)
+~~~
+
+Checkpoint 保存：
+
+~~~json
+{
+  "status": "WAITING_TOOL",
+  "tool_calls": [
+    {
+      "id": "call-A",
+      "type": "function",
+      "function": {
+        "name": "word_count",
+        "arguments": "{\"text\": \"durable run needs recovery\"}"
+      }
+    }
+  ]
+}
+~~~
+
+**步骤 6：第二次启动，恢复原 Tool Call**
+
+再次运行相同命令，不输入新的任务：
+
+~~~text
+History: 2 messages
+Run resumed: WAITING_TOOL
+调用工具 Tool Call: word_count, 参数: {'text': 'durable run needs recovery'}
+工具执行结果 Tool Result:
+Word count: 4
+Answer: “durable run needs recovery” 的单词数是 4。
+~~~
+
+双层循环的实际路径：
+
+~~~text
+外层循环第一次
+  → resume_run = True
+  → 跳过 input
+  → tool_calls = Checkpoint 中的原 Tool Call
+
+内层循环第一次
+  → tool_calls 不是 None
+  → 跳过模型调用
+  → 执行原 word_count
+  → 保存 Tool Result
+  → Checkpoint = RUNNING
+  → tool_calls = None
+
+内层循环第二次
+  → tool_calls is None
+  → 调用模型
+  → 模型根据 Tool Result 生成最终回答
+  → 没有新 Tool Call
+  → Checkpoint = SUCCEEDED
+  → 退出内层循环
+
+外层循环第二次
+  → resume_run = False
+  → 等待新的用户输入
+~~~
+
+**最终 JSON 验收**
+
+`sessions/session-012-parent.jsonl` 最终形成四条完整消息：
+
+~~~text
+user
+  → assistant(tool_call A)
+  → tool(result for A)
+  → assistant(final answer)
+~~~
+
+Assistant Tool Call 与 Tool Result 使用相同 ID，证明第二次启动执行的是原 Tool Call A，而不是重新生成的新调用。
+
+`runs/run-012.json` 最终变为：
+
+~~~json
+{
+  "status": "SUCCEEDED",
+  "tool_calls": []
+}
+~~~
+
+<details>
+<summary><strong>🔍 流程解析：从第一次运行到完成恢复</strong></summary>
+
+这次是一次真正的 Resume：第二次启动没有重新输入任务，也没有重新调用模型生成新的 Tool Call，而是执行了第一次遗留的 Tool Call。
+
+**一、第一次运行：产生 Checkpoint 后崩溃**
+
+**1. 接收用户输入**
+
+外层循环正常读取：
+
+~~~text
+请只调用 word_count 工具统计：durable run needs recovery
+~~~
+
+Session 写入第 1 条：
+
+~~~json
+{
+  "role": "user",
+  "content": "请只调用 word_count 工具统计：durable run needs recovery"
+}
+~~~
+
+Checkpoint 状态先变为：
+
+~~~text
+RUNNING
+~~~
+
+**2. 模型生成 Tool Call**
+
+此时：
+
+~~~python
+tool_calls is None
+~~~
+
+所以内层循环调用模型。模型决定调用 `word_count`，Session 写入第 2 条：
+
+~~~json
+{
+  "role": "assistant",
+  "tool_calls": [
+    {
+      "id": "chatcmpl-tool-b12e36c287c19383",
+      "function": {
+        "name": "word_count",
+        "arguments": "{\"text\": \"durable run needs recovery\"}"
+      }
+    }
+  ]
+}
+~~~
+
+Checkpoint 随即保存为：
+
+~~~text
+status = WAITING_TOOL
+tool_calls = word_count Tool Call
+~~~
+
+**3. 模拟崩溃**
+
+Runtime 显示 Tool Call，但在真正执行工具之前抛出异常：
+
+~~~text
+Tool Call 已保存
+  → Checkpoint 已保存
+  → Tool 尚未执行
+  → 程序崩溃
+~~~
+
+此时磁盘状态：
+
+~~~text
+Session：2 条消息
+Checkpoint：WAITING_TOOL
+~~~
+
+**二、第二次启动：自动恢复**
+
+终端显示：
+
+~~~text
+History: 2 messages
+Run resumed: WAITING_TOOL
+~~~
+
+这两行分别说明：
+
+~~~text
+History: 2 messages
+  → Session 恢复了 user 和 assistant(tool_call)
+
+Run resumed: WAITING_TOOL
+  → Checkpoint 告诉 Runtime：存在待执行工具
+~~~
+
+代码得到：
+
+~~~python
+resume_run = True
+pending_tool_calls = [word_count Tool Call]
+~~~
+
+**三、外层循环跳过用户输入**
+
+因为：
+
+~~~python
+if resume_run:
+~~~
+
+成立，所以执行：
+
+~~~python
+tool_calls = pending_tool_calls
+resume_run = False
+~~~
+
+此时：
+
+~~~text
+tool_calls = [word_count Tool Call]
+~~~
+
+程序没有执行 `input("> ")`，所以不需要重新输入任务，也没有在 Session 中产生重复的 user 消息。
+
+**四、内层循环跳过模型调用**
+
+此时 `tool_calls` 已经包含原来的 `word_count`：
+
+~~~python
+if tool_calls is None:
+~~~
+
+条件为 `False`，所以不会重新调用模型，而是直接进入：
+
+~~~python
+for tool_call in tool_calls:
+~~~
+
+执行原来的工具请求。
+
+**五、执行原 Tool Call**
+
+因为崩溃标记已经存在，这次不会再次模拟崩溃：
+
+~~~python
+if not crash_flag_path.exists():
+~~~
+
+条件为 `False`。
+
+随后执行：
+
+~~~python
+tool_result = tool["execute"](**tool_arguments)
+~~~
+
+得到：
+
+~~~text
+Word count: 4
+~~~
+
+Session 写入第 3 条：
+
+~~~json
+{
+  "role": "tool",
+  "tool_call_id": "chatcmpl-tool-b12e36c287c19383",
+  "content": "Word count: 4"
+}
+~~~
+
+最关键的验证是 ID 一致：
+
+~~~text
+原 Tool Call ID = chatcmpl-tool-b12e36c287c19383
+Tool Result ID   = chatcmpl-tool-b12e36c287c19383
+~~~
+
+这证明执行的是第一次崩溃前遗留的 Tool Call，不是重新生成的调用。
+
+工具完成后：
+
+~~~python
+save_checkpoint(checkpoint_path, "RUNNING")
+tool_calls = None
+~~~
+
+含义是：
+
+~~~text
+工具已经完成
+  → 当前没有待执行工具
+  → 下一步应该调用模型
+~~~
+
+**六、模型根据 Tool Result 生成最终回答**
+
+内层循环再次开始。
+
+这次：
+
+~~~python
+tool_calls is None
+~~~
+
+条件成立，所以调用模型。
+
+模型看到完整上下文：
+
+~~~text
+用户要求统计单词
+  → 模型请求 word_count
+  → word_count 返回 4
+~~~
+
+于是返回最终答案，Session 写入第 4 条：
+
+~~~json
+{
+  "role": "assistant",
+  "content": "“durable run needs recovery” 的单词数是 **4**。"
+}
+~~~
+
+模型没有继续请求工具，因此：
+
+~~~python
+if not tool_calls:
+~~~
+
+成立，Checkpoint 更新为：
+
+~~~json
+{
+  "status": "SUCCEEDED",
+  "tool_calls": []
+}
+~~~
+
+**七、最终结果**
+
+Parent Session 最终形成完整消息链：
+
+~~~text
+#1 user
+  → 提出任务
+
+#2 assistant
+  → 生成 word_count Tool Call
+  → 第一次运行在这里崩溃
+
+#3 tool
+  → 第二次启动后恢复执行
+  → 返回 Word count: 4
+
+#4 assistant
+  → 根据 Tool Result 生成最终回答
+~~~
+
+完整状态流：
+
+~~~text
+RUNNING
+  → WAITING_TOOL
+  → 程序崩溃
+  → 重新启动
+  → 恢复原 Tool Call
+  → RUNNING
+  → SUCCEEDED
+~~~
+
+这次和之前“重新输入任务”的本质区别是：
+
+| 之前 | 现在 |
+|---|---|
+| 重新输入用户任务 | 没有重新输入 |
+| 模型生成新的 Tool Call | 使用原来的 Tool Call |
+| 出现两条 user 消息 | 只有一条 user 消息 |
+| 原 Tool Call 没有结果 | 原 Tool Call 得到匹配的 Tool Result |
+| 属于重新执行 | 属于断点恢复 |
+
+`/exit` 在保存用户消息之前就被处理，因此不会写入 Session。最终 Session 正好保持四条完整消息。
+
+</details>
+
+<br>
+
+**本版边界**
+
+- 当前只实现 Parent Run 的最小 Checkpoint 与 Resume。
+- 暂不包含 Retry、Heartbeat、跨进程 Worker 和任务队列。
+- 暂不保证具有副作用的工具 Exactly-once；这需要 Idempotency 机制。
+- 单次模型返回多个 Tool Call 时，暂未逐个记录工具完成进度。
+- 一次性崩溃标记只用于教学，不属于正式 Runtime。
+
+**完整代码入口**
+
+- [V0.14 完整 main.py](14_v0.14_durable_run/main.py)
+- [V0.14 durable.py](14_v0.14_durable_run/durable.py)
+- [V0.14 sandbox.py](14_v0.14_durable_run/sandbox.py)
+- [V0.14 renderer.py](14_v0.14_durable_run/renderer.py)
+- [V0.14 subagent.py](14_v0.14_durable_run/subagent.py)
+
+</details>
+
 ## 后续路线图
 
 | 版本 | 主题 | 状态 |
 |---|---|---|
-| V0.14 | Durable Run | 计划中 |
 | V1.0 | Micro Pi Core | 计划中 |
 
 > 路线图只说明方向。对应版本完成并验收后，再补充完整系统流程和渐进式教程。
