@@ -12,7 +12,9 @@
 4. 完成运行与验收后，再打开完整代码快照进行核对。
 5. 代码中的 `[V0.x 新增]` 和 `[V0.x 修改]` 注释也可以帮助定位差异。
 
-> V0.1–V0.14 已完成并通过测试。所有命令均从项目根目录运行，对话版本输入 `/exit` 可以结束程序。
+> V0.1–V1.0 已完成验收。所有命令均从项目根目录运行，对话版本输入 `/exit` 可以结束程序。
+
+环境准备、依赖安装和 `.env` 配置统一见 [项目首页的快速开始](../README.md)。Windows 使用 Conda 环境 `learn-pi`；直接体验最新版本可跳到 [V1.0](#v10--micro-pi-core已验收)。前面版本中的“当前”“尚未实现”等描述均以对应版本为范围。
 
 ## 已完成版本
 
@@ -3397,10 +3399,163 @@ RUNNING
 
 </details>
 
-## 后续路线图
+## V1.0 — micro-pi Core（已验收）
+
+V1.0 将前面各版本的能力逐步整理为模块：`provider.py` 负责模型请求，`session.py` 保存完整消息，`context.py` 管理和压缩当前上下文，`tool_registry.py` 管理工具，`runtime.py` 执行 Agent Loop 和管理 Checkpoint，`renderer.py` 展示事件。终端输入和启动组装保留在 `main.py`。
+
+**上一版的问题与本版目标**
+
+V0.14 已有完整 Agent 能力与最小中断恢复，但模型请求、消息追加、上下文压缩、工具注册和主循环仍大量集中在 `main.py`。V1.0 通过职责拆分让它们能分别阅读、验证和复用；外层终端循环和内层 Agent Loop 继续存在，没有消除其中任何一个循环。
+
+**宏观流程**
+
+```mermaid
+flowchart TD
+    A[main.py 加载配置并组装对象] --> B[Runtime 读取未完成 Checkpoint]
+    B --> C{是否需要恢复}
+    C -- 是 --> D[恢复已有任务]
+    C -- 否 --> E[读取终端输入]
+    E --> F{是否为 /exit}
+    F -- 是 --> Z[退出]
+    F -- 否 --> G[Runtime.start_run 保存用户消息与 RUNNING]
+    G --> H[Runtime.run_agent_loop]
+    D --> H
+    H --> I{是否已有待执行 Tool Call}
+    I -- 否 --> J[Context 检查压缩并由 Provider 调用模型]
+    J --> K[保存模型消息]
+    K --> L{模型是否请求工具}
+    L -- 否 --> M[保存 SUCCEEDED 并发送 agent_end]
+    M --> E
+    L -- 是 --> N[保存 WAITING_TOOL]
+    N --> O[Registry 查找与 Sandbox 检查后执行工具]
+    I -- 是 --> O
+    O --> P[保存工具结果与 RUNNING]
+    P --> H
+```
+
+从项目根目录运行：
+
+```powershell
+conda activate learn-pi
+python learning-versions/15_v1.0_micro_pi_core/main.py
+```
+
+可以依次观察普通对话、`read` 和 `word_count` 工具、SubAgent 委托、上下文压缩以及重启后恢复。Session 记录完整消息；Checkpoint 的 `RUNNING` 和 `WAITING_TOOL` 状态记录未完成任务。当前恢复机制仍不保证工具副作用的幂等性，也不逐个记录一批工具调用的完成进度。
+
+入口：[main.py](15_v1.0_micro_pi_core/main.py) · [runtime.py](15_v1.0_micro_pi_core/runtime.py) · [context.py](15_v1.0_micro_pi_core/context.py) · [tool_registry.py](15_v1.0_micro_pi_core/tool_registry.py)
+
+### 从 V0.14 到 V1.0 的整理顺序
+
+1. 用 `Provider.call()` 统一 Parent、摘要和 Child 的模型调用。
+2. 用 `Session.load()` 与 `Session.append()` 管理完整历史。
+3. 用 `Context` 保存当前消息，并将摘要、近期轮次保留和压缩逻辑移入其中。
+4. 用 `ToolRegistry` 集中注册、查找工具和生成 Schema；Extension 通过同一个 Registry 注册。
+5. 提取内层 Agent Loop，通过事件把输出交给 Renderer。
+6. 用 `Runtime` 保存运行依赖，统一保存消息、启动任务和读取 Checkpoint；`main.py` 保留终端输入与对象组装。
+
+**动手整理时的关键连接**
+
+```python
+# [V1.0 新增] Context、Session 和 Provider 分别承担不同职责
+session = Session(session_path)
+history = session.load()
+context = Context(system_messages, history)
+provider = Provider(base_url, model, api_key)
+
+# [V1.0 新增] 创建 Runtime，保存模型、工具、消息和运行配置
+runtime = Runtime(
+    context,
+    provider,
+    tools,
+    tool_registry,
+    sandbox,
+    emit,
+    session,
+    checkpoint_path,
+    MAX_CONTEXT_MESSAGES,
+    RECENT_TURNS,
+)
+```
+
+这是职责连接示意。实际代码先定义文件工具和委托工具，再创建 Registry、加载 Extension、生成 `tools`，最后创建 Runtime；不要把示意片段直接放到依赖尚未定义的位置。
+
+Runtime 的外部调用分别是：
+
+| 调用 | 作用 |
+|---|---|
+| `runtime.load_pending_run()` | 返回 `RUNNING` / `WAITING_TOOL` 的 Checkpoint，否则返回 `None` |
+| `runtime.start_run(user_message)` | 同步保存用户消息、写入 `RUNNING`，再开始 Agent Loop |
+| `runtime.run_agent_loop(tool_calls)` | 继续已有任务；`None` 表示调用模型，列表表示先执行保存的工具 |
+| `runtime.add_message(message)` | 将模型消息或工具结果同时追加到 Session 与 Context |
+
+注意：`self.session = session` 保存的是对象；`self.add_message()` 是方法，不要用 Session 对象覆盖这个方法。`context.messages` 在整个流程中统一作为当前消息入口，不再保留一个可能在压缩后失效的旧列表别名。
+
+**压缩具体做什么**
+
+每次需要调用模型时先检查 Context：默认消息数大于 8 且用户轮数超过 2 时，按倒数第二条 `user` 消息划分旧消息与近期消息。原始系统提示词保留；旧消息调用 Provider 生成摘要；最近两轮原样保留，其中可能包含尚未得到回答的当前用户轮。
+
+重建后的内存结构是 `system + summary + recent_messages`。完整 Session 保持原样继续追加；摘要不写回 Parent Session，因此重启后可能再次从完整历史触发压缩。压缩会额外调用一次模型，依据是消息条数而非 token 数量。已有摘要在下一次压缩时也会参与总结。
+
+Runtime 发送 `context_compacted`、`tool_start`、`tool_end`、`agent_end` 等事件，Renderer 负责显示；不需要让 Runtime 直接打印终端内容。
+
+```text
+main.py：初始化 → 读取未完成任务或接收输入
+    → Runtime：恢复任务 / start_run()
+        → Context：检查并压缩上下文
+        → Provider：调用模型
+        → ToolRegistry + Sandbox：查找、检查并执行工具
+        → Session + Context：保存消息
+        → Checkpoint：记录状态
+        → Event → Renderer：显示结果
+```
+
+验收覆盖普通对话、文件工具、Extension、Skill、SubAgent、Session 恢复、Context 压缩和任务中断恢复。完整验收依据与实现边界见 [项目进度](../docs/进度.md)。
+
+**手动运行与观察**
+
+在上面的启动命令执行后逐条输入，每次等待本轮完成：
+
+| 验证项 | 输入示例或操作 | 应观察到的结果 |
+|---|---|---|
+| 普通对话 | `你好，请简短介绍自己。` | 直接回答，无需工具 |
+| 文件读取 | `请使用 read 读取 README.md 并总结项目目标。` | read → Tool Result → 最终回答 |
+| 文件写入 | `请使用 write 创建 sessions/v1-final-test.txt，内容为 alpha beta。` | 写入成功 |
+| 文件编辑 | `请使用 edit 把 sessions/v1-final-test.txt 中 beta 改为 gamma，再读取确认。` | 读取结果为 alpha gamma |
+| Extension | `请使用 word_count 统计 one two three four。` | `Word count: 4` |
+| Sandbox | `请调用 bash 执行 echo sandbox-test。` | 实际调用时返回 `Sandbox blocked tool: bash`；模型自行拒绝不算权限检查验收 |
+| Skill | `请先读取 code-review Skill，再审查 learning-versions/15_v1.0_micro_pi_core/tool_registry.py。` | 读取指南与目标文件，返回流程图和发现列表 |
+| Explorer | `请使用 delegate_explorer 分析 learning-versions/15_v1.0_micro_pi_core/runtime.py。` | Parent 委托，Child 只读后返回流程说明 |
+| Comparator | `请使用 delegate_comparator 比较 learning-versions/15_v1.0_micro_pi_core/session.py 与 learning-versions/15_v1.0_micro_pi_core/context.py。` | 返回职责对比表 |
+| 压缩与记忆 | 让模型记住 `final-orange`，继续对话直到出现压缩，再询问测试词 | 压缩提示出现，模型仍能回答测试词 |
+| Session | `/exit` 后重启，再询问测试词 | `History` 恢复历史；回答来自恢复后的 Context |
+
+模型自主决定工具调用，只有终端或 Session 中存在对应调用和结果，才算验证了工具链路。
+
+**实际中断恢复**
+
+默认文件为 `sessions/session-013-parent.jsonl`、`sessions/session-013-explorer.jsonl`、`sessions/session-013-comparator.jsonl` 和 `runs/run-013.json`。无须每次重建 JSONL；独立实验应配套更换历史与 Checkpoint 路径。恢复前后保持同一组文件。
+
+1. 为验证 `WAITING_TOOL`，在编辑器调试模式下给 `runtime.py` 中的 `for tool_call in tool_calls:` 设置断点。使用 `learn-pi` 解释器和项目根目录作为工作目录。
+2. 输入 `请使用 word_count 统计 one two three four five。`，在首次到达工具执行前的断点时检查 Checkpoint，应为 `WAITING_TOOL`，Session 已有 Assistant Tool Call，尚无对应 Tool Result。
+3. 停止调试、移除断点，再用终端启动同一版本。程序显示 `Run resumed: WAITING_TOOL`，继续原工具调用，生成结果与最终回答；无需再次输入任务。
+4. 为验证 `RUNNING`，可在主模型请求前（`self.provider.call(...)`）设置断点，待新任务状态写入后终止进程，再重启。已有用户消息不会重复追加。
+5. 完成后检查 `runs/run-013.json`，应为 `SUCCEEDED` 且 `tool_calls` 为空。核对 Tool Result 使用原 Tool Call ID。
+
+Child 的完整轨迹保存在各自 Session，Parent 只记录委托请求和返回结果。Child 每次委托重新建立消息上下文，当前不会恢复未完成的 Child Run。
+
+**实现边界**
+
+- Parent 注册的 `bash` 默认被工具白名单拒绝；Workspace 路径检查属于具体文件工具，不是 OS 沙箱。
+- 网络异常会保留最后已写入的 Checkpoint，但没有自动重试；SSL 失败时先排查连接与代理，配置说明见项目首页。
+- 工具副作用和 Tool Result 保存之间可能发生中断，恢复可能重复执行工具；一批 Tool Call 也未逐个保存进度。
+- Streaming 未接入当前 Provider 的输出链路；事件类型的存在不等于已经实现流式响应。
+
+完整代码：[Provider](15_v1.0_micro_pi_core/provider.py) · [Session](15_v1.0_micro_pi_core/session.py) · [Context](15_v1.0_micro_pi_core/context.py) · [Registry](15_v1.0_micro_pi_core/tool_registry.py) · [Runtime](15_v1.0_micro_pi_core/runtime.py) · [Renderer](15_v1.0_micro_pi_core/renderer.py) · [Sandbox](15_v1.0_micro_pi_core/sandbox.py) · [SubAgent](15_v1.0_micro_pi_core/subagent.py) · [Checkpoint](15_v1.0_micro_pi_core/durable.py)
+
+## 版本收尾
 
 | 版本 | 主题 | 状态 |
 |---|---|---|
-| V1.0 | Micro Pi Core | 计划中 |
+| V1.0 | Micro Pi Core | 已验收：完成核心模块拆分与 Runtime / CLI 分层 |
 
-> 路线图只说明方向。对应版本完成并验收后，再补充完整系统流程和渐进式教程。
+> 第一轮学习已完成。Streaming、自动重试和更完善的任务恢复可以作为后续独立增强。

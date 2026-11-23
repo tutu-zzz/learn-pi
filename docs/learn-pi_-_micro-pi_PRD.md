@@ -1,7 +1,7 @@
 # learn-pi — PRD
 
-> 版本：V0.1  
-> 项目阶段：学习验证期  
+> 版本：V1.0 验收同步版<br>
+> 项目阶段：第一轮学习与核心验收完成，教程整理期<br>
 > 项目类型：Agent 学习 / 极简 Agent 实现 / 教学型开源项目  
 > 项目名称：`learn-pi`  
 > 核心程序：`micro-pi`  
@@ -9,6 +9,8 @@
 > 产品形态：Terminal-native CLI / 极简终端 Agent  
 > 参考方向：Pi Agent  
 > 核心原则：Minimal · Transparent · Educational · Terminal-native
+
+本文同时保留逐版的设计问题与长期方向。第 23–37 章的阶段目标按各版本快照理解；V1.0 的实际模块与边界见第 38–39 章，当前阶段见第 58–60 章。验收事实以 [进度记录](进度.md) 为准，运行入口与环境配置见 [项目首页](../README.md)。
 
 ---
 
@@ -2008,7 +2010,24 @@ State Transition
 
 # 38. V1.0 — micro-pi Core
 
-最终核心结构可能演化为：
+**状态：第一轮手动验收完成。** V1.0 的主要变化是把前面版本已经理解和实现的机制整理成职责明确的模块，而不是再引入一个大型框架。
+
+实际入口为 `learning-versions/15_v1.0_micro_pi_core/main.py`。已实现的职责如下：
+
+| 文件 | 职责 |
+|---|---|
+| `main.py` | 配置、工具实现与 Schema 定义、Skill / Extension 加载、依赖组装和终端输入 |
+| `provider.py` | 统一模型请求，供 Parent、Child 和摘要调用 |
+| `session.py` | 完整消息历史的读取与 JSONL 追加 |
+| `context.py` | 当前消息、旧消息摘要和近期轮次保留 |
+| `tool_registry.py` | 工具注册、查找和模型可见 Schema 生成 |
+| `runtime.py` | 消息追加、新任务启动、Agent Loop 与 Checkpoint 恢复判断 |
+| `durable.py` | Checkpoint JSON 的读取与保存 |
+| `renderer.py` | 运行事件的终端显示 |
+| `sandbox.py` | 工具名称白名单检查 |
+| `subagent.py` | 独立 Child 消息与只读工具循环 |
+
+设计涉及的核心概念包括：
 
 ```text
 micro-pi
@@ -2029,15 +2048,17 @@ micro-pi
 └── SubAgent
 ```
 
-但这些模块不会一次出现。
+这些概念不要求逐个建立文件或类。例如 Message 仍使用 Python 字典；Compaction 在 `Context` 内；Skill、Extension 加载和具体 Coding Tools 暂时留在 `main.py`。拆分应来自明确职责，而不是预先铺设目录。
 
-它们必须从前面的学习过程中逐渐成长出来。
+V1.0 已验收普通对话、工具、Skill、Extension、SubAgent、Session、Context 压缩和最小任务恢复。默认 Parent 使用 `session-013-parent.jsonl`，Child 使用对应 Explorer / Comparator 文件，Checkpoint 使用 `run-013.json`；这些编号是当前代码中的文件标识，不代表 V0.13 入口。
+
+边界：仅 Parent Run 支持最小恢复；Child 顺序执行并且只读。未实现 Streaming、网络自动重试、逐工具恢复进度、工具副作用幂等保证和操作系统级沙箱。
 
 ---
 
 # 39. Runtime 与 CLI 分层
 
-随着项目成长，需要逐渐形成：
+V1.0 已将内层 Agent Loop 移入 `Runtime`，外层终端循环保留在 `main.py`，形成以下职责边界：
 
 ```text
 ┌──────────────────────────────┐
@@ -2067,6 +2088,12 @@ micro-pi
 核心理解：
 
 > Agent Runtime 不应该依赖 CLI。
+
+当前 CLI 调用 `Runtime.start_run(user_message)` 开始新任务，或根据 `Runtime.load_pending_run()` 返回的 Checkpoint 调用 `Runtime.run_agent_loop(tool_calls)` 恢复。Runtime 通过传入的事件函数报告结果，不直接调用 `input()` / `print()`。
+
+`Runtime.add_message()` 同时更新 Session 和 Context。`Context.compact()` 在超过消息条数阈值且有可压缩的旧轮次时生成摘要，保留最近两轮；完整 Session 不被摘要覆盖。默认阈值为 8 条，用于教学观察，不是生产环境的 token 预算策略。
+
+本版仍由 `main.py` 组装具体文件工具和 Extension，因此替换界面还需要相应的启动与配置代码；Runtime 的循环实现本身可以复用。
 
 未来理论上可以替换成：
 
@@ -2201,6 +2228,8 @@ V0.4
 ---
 
 # 43. 项目目录演进
+
+以下“初期 / 中期 / 后期”保留为原始目录设计示意，并非当前磁盘目录清单。实际逐版代码位于 `learning-versions/`，V1.0 已验收快照保留在 `15_v1.0_micro_pi_core/`；`src/micro_pi/main.py` 仍是早期学习代码。当前完整结构见 [项目首页](../README.md)。
 
 ## 初期
 
@@ -2842,105 +2871,56 @@ Educational
 
 # 58. 当前项目阶段
 
-当前处于：
+第一轮 `Learn Agent` 学习已完成，V0.1–V1.0 均已验收。当前重点是维护逐版快照、完善教程说明和保留可复现的验收记录。
+
+已完成的学习链路：
 
 ```text
-Phase 1
-
-Learn Agent
+一次模型请求 → Conversation → Tool Calling → Agent Loop
+    → Registry / Coding Tools → Session / Context Compaction
+    → Skill / Extension / Event / Sandbox / SubAgent
+    → Durable Run → 模块化 micro-pi Core
 ```
 
-第一目标：
-
-> 作者本人真正学会 Agent。
+第一目标仍然是作者能理解并解释每一步机制。后续增强应单独提出问题、实现和验收，不回写到历史版本制造能力错觉。
 
 ---
 
 # 59. 当前开发版本
 
-当前从：
+当前已验收版本为 **V1.0 — micro-pi Core**。
 
-```text
-V0.1
+在项目根目录运行：
+
+```powershell
+conda activate learn-pi
+python learning-versions/15_v1.0_micro_pi_core/main.py
 ```
 
-开始。
+开发环境为 Conda `learn-pi`、Python 3.12。依赖见 `requirements.txt`；模型配置使用根目录 `.env` 的 `MICRO_PI_BASE_URL`、`MICRO_PI_MODEL`、`MICRO_PI_API_KEY`，地址不含 `/chat/completions`。服务需要支持 OpenAI 兼容的聊天接口和 Tool Calling。
 
-唯一目标：
-
-> **让 micro-pi 在终端中完成第一次最简单、最透明的 LLM 对话。**
-
-此阶段只需要：
-
-```text
-Terminal Input
-       ↓
-LLM Request
-       ↓
-LLM Response
-       ↓
-Terminal Output
-```
-
-暂时不引入：
-
-```text
-Tool
-
-Agent Loop
-
-Session
-
-Skill
-
-Sandbox
-
-SubAgent
-```
+下一轮可独立考虑 Streaming、网络重试或更完善的 Durable Run；这些不属于已完成的 V1.0 功能。
 
 ---
 
 # 60. 当前最小产品形态
 
-第一版：
-
-```bash
-micro-pi
-```
-
-界面：
+V1.0 是通过 Python 脚本启动的终端 Agent，尚未提供安装后直接运行的 `micro-pi` 命令。
 
 ```text
-micro-pi
-
-> hello
-
-Hello!
-
->
+main.py：配置与依赖组装
+    → 读取 Session，创建 Context 与 Runtime
+    → 存在未完成任务：恢复运行
+    → 否则：终端 input()
+        → /exit：退出，不写入 Session
+        → 其他输入：Runtime.start_run()
+            → Context / Provider / ToolRegistry / Sandbox
+            → Session / Checkpoint / Event / Renderer
 ```
 
-内部：
+普通对话直接回答；工具请求由 Python 执行并把结果送回模型。默认允许 Parent 读写编辑文件、统计词数和委托 Child；`bash` 已注册但默认被 Sandbox 白名单拒绝。文件工具约束 Workspace 路径，Sandbox 不提供操作系统级隔离。
 
-```text
-input()
-   ↓
-call_model()
-   ↓
-print()
-```
-
-如果能够完全理解这三步：
-
-> V0.1 就成功了。
-
-下一阶段再增加：
-
-```text
-Conversation
-```
-
-而不是提前增加复杂能力。
+Session 和 Checkpoint 会复用并追加或更新，不必每次测试重新创建。独立实验应配套更换 Session 和 Checkpoint；恢复测试前后必须使用同一组文件。终端提示与工具结果可直接观察，具体测试见 [版本学习指南](../learning-versions/README.md)。
 
 ---
 

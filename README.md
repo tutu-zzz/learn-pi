@@ -36,6 +36,8 @@ Tool Registry
 Coding Agent
     ↓
 Session / Context / Skill / Extension / Event / Sandbox / SubAgent
+    ↓
+Durable Run / micro-pi Core
 ~~~
 
 > 这个项目的目标不是“再造一个完整的 Pi”，而是借鉴 Pi 的极简思想，把 Agent 的核心机制一层一层拆开。
@@ -62,7 +64,7 @@ Session / Context / Skill / Extension / Event / Sandbox / SubAgent
 
 ## 🚦 当前进度
 
-当前已经完成并验收到 **V0.13 — SubAgent**，下一阶段将进入 **V0.14 — Durable Run**。Streaming 不影响 Agent 核心能力，暂时作为可选增强保留。
+当前已经完成并验收到 **V1.0 — micro-pi Core**，完成从一次模型调用到模块化终端 Agent 的第一轮学习。Streaming 不影响 Agent 核心能力，暂时作为可选增强保留。
 
 | 版本 | 主题 | 状态 |
 | --- | --- | :---: |
@@ -79,16 +81,16 @@ Session / Context / Skill / Extension / Event / Sandbox / SubAgent
 | V0.11 | Event（Streaming 可选） | ✅ |
 | V0.12 | Sandbox | ✅ |
 | V0.13 | SubAgent | ✅ |
-| V0.14 | Durable Run | 🗓️ |
-| V1.0 | micro-pi Core | 🗓️ |
+| V0.14 | Durable Run | ✅ |
+| V1.0 | micro-pi Core | ✅ |
 
-> `✅ 已完成` · `🗓️ 计划中`
+> `✅ 已完成` · `🚧 进行中` · `🗓️ 计划中`
 
 ### 📚 版本学习入口
 
 每个已完成版本的目标、流程、运行方法和观察重点已集中整理：
 
-> **[查看 V0.1–V0.13 版本详细说明 →](learning-versions/README.md)**
+> **[查看 V0.1–V1.0 版本说明 →](learning-versions/README.md)**
 
 ## 🚀 快速开始
 
@@ -105,20 +107,20 @@ git clone https://github.com/tutu-zzz/learn-pi.git
 cd learn-pi
 ~~~
 
-Windows PowerShell：
+Windows PowerShell（Conda）：
 
 ~~~powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+conda create -n learn-pi python=3.12 pip
+conda activate learn-pi
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ~~~
 
-macOS / Linux：
+macOS / Linux（Conda）：
 
 ~~~bash
-python3 -m venv .venv
-source .venv/bin/activate
+conda create -n learn-pi python=3.12 pip
+conda activate learn-pi
 python -m pip install -r requirements.txt
 cp .env.example .env
 ~~~
@@ -141,6 +143,10 @@ MICRO_PI_API_KEY=your-api-key
 
 > 🔐 `.env` 已被 Git 忽略。请勿把真实 API Key 写入源码、截图或提交记录。
 
+如果已经配置过 `.env`，保留现有文件，只修改需要更换的字段。模型名称以服务商提供且账号可用的名称为准。
+
+本机曾出现经代理请求 DeepSeek 时的 SSL EOF，而直连成功。如果遇到相同情况，先检查网络与代理；确认该域名可直连后，可以在 `.env` 中添加 `NO_PROXY=api.deepseek.com`。这是可选的本地网络设置，不是所有模型服务的通用要求。
+
 ### 3. 运行项目
 
 第一次学习建议从 V0.1 开始：
@@ -159,10 +165,29 @@ Answer: ...
 如果希望体验当前最新的完整版本：
 
 ~~~bash
-python learning-versions/13_v0.13_subagent/main.py
+python learning-versions/15_v1.0_micro_pi_core/main.py
 ~~~
 
 对话中输入 `/exit` 可以退出程序。其余版本的运行方式与学习重点请查看[版本学习指南](learning-versions/README.md)。
+
+请从项目根目录运行。V1.0 默认追加到 `sessions/session-013-parent.jsonl`，Child 分别写入 Explorer / Comparator Session；任务状态保存在 `runs/run-013.json`。重启会读取 Parent 历史，并自动继续 `RUNNING` 或 `WAITING_TOOL` 任务。修改会话路径做独立实验时，需要配套修改 Checkpoint 路径。
+
+### 4. V1.0 模块与实现边界
+
+| 模块 | 职责 |
+| --- | --- |
+| `main.py` | 配置、工具实现、Skill / Extension 加载、对象组装和终端输入 |
+| `provider.py` | 统一 Parent、摘要和 Child 的模型请求 |
+| `session.py` | 加载和追加完整消息历史 |
+| `context.py` | 管理当前上下文，压缩旧消息并保留近期轮次 |
+| `tool_registry.py` | 注册和查找工具，生成模型可见 Schema |
+| `runtime.py` | 保存消息、开始任务、执行 Agent Loop、读取和更新 Checkpoint |
+| `renderer.py` | 将运行事件显示到终端 |
+| `sandbox.py` / `subagent.py` / `durable.py` | 工具权限、受限 Child Agent 和最小 Checkpoint 持久化 |
+
+Parent 默认允许 `read`、`write`、`edit`、`word_count` 和两类委托工具；`bash` 已注册但不在允许执行的白名单中。Child 只使用 `read`，按顺序执行，历史记录不会在下一次委托时自动恢复。文件工具检查 Workspace 路径，Sandbox 本身只检查工具名，未提供操作系统级隔离。
+
+Streaming、网络自动重试、工具幂等执行和逐个工具恢复进度尚未实现，属于后续增强。
 
 ## 🧠 Agent 到底是怎么工作的？
 
@@ -209,7 +234,7 @@ while True:
 
 1. **先运行上一版**：确认它已经能做什么。
 2. **再提出新问题**：理解为什么需要增加下一个能力。
-3. **只看本版新增内容**：代码中的 `[V0.x 新增]` 和 `[V0.x 修改]` 会标出变化。
+3. **只看本版新增内容**：代码中的 `[V0.x 新增]` / `[V0.x 修改]` 和 `[V1.0 新增]` / `[V1.0 修改]` 会标出变化。
 4. **亲手输入测试任务**：观察 Message、Tool Call、Tool Result 和 Event。
 5. **尝试删掉关键代码**：根据运行变化解释它的职责。
 6. **最后进入下一版**：带着问题理解新抽象，而不是背结论。
@@ -269,13 +294,26 @@ learn-pi/
 │   │   ├── renderer.py
 │   │   ├── extensions/word_count.py
 │   │   └── skills/code-review/SKILL.md
-│   ├── 14_v0.14_durable_run/         # 计划中
-│   ├── 15_v1.0_micro_pi_core/        # 计划中
-│   └── README.md                     # V0.1–V0.13 可折叠教程
+│   ├── 14_v0.14_durable_run/         # Durable Run 快照
+│   ├── 15_v1.0_micro_pi_core/        # 模块化 Agent Core
+│   │   ├── main.py                 # 启动组装和终端循环
+│   │   ├── runtime.py              # Agent Loop 与任务状态
+│   │   ├── provider.py
+│   │   ├── session.py
+│   │   ├── context.py
+│   │   ├── tool_registry.py
+│   │   ├── durable.py
+│   │   ├── renderer.py
+│   │   ├── sandbox.py
+│   │   ├── subagent.py
+│   │   ├── extensions/word_count.py
+│   │   └── skills/code-review/SKILL.md
+│   └── README.md                     # 版本学习指南
 ├── sessions/                         # 运行时生成，已被 Git 忽略
+├── runs/                             # Checkpoint，已被 Git 忽略
 ├── src/
 │   └── micro_pi/
-│       └── main.py                   # 主学习工作区
+│       └── main.py                   # 保留的早期学习工作区，非 V1.0 入口
 ├── .env.example
 ├── .gitignore
 ├── LICENSE
