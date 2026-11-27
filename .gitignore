@@ -5,9 +5,13 @@
 __pycache__/
 *.py[cod]
 .venv/
+*.egg-info/
+/learning-versions/16_v1.1_cli/build/
+/learning-versions/16_v1.1_cli/dist/
 
 # Runtime session data
 /sessions/
+.micro-pi/
 
 # Durable run state
 /runs/

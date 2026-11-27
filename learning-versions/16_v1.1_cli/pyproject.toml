@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "learn-pi"
+version = "1.1.0"
+description = "A small, installable coding agent built step by step in the learn-pi tutorial"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["requests==2.34.2"]
+
+[project.urls]
+Repository = "https://github.com/tutu-zzz/learn-pi"
+
+[project.scripts]
+micro-pi = "micro_pi.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+[tool.setuptools.package-data]
+micro_pi = ["skills/code-review/SKILL.md"]

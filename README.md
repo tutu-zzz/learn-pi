@@ -92,6 +92,8 @@ Durable Run / micro-pi Core
 
 > **[查看 V0.1–V1.0 版本说明 →](learning-versions/README.md)**
 
+结课后可把 Agent 安装为 `micro-pi` 命令，或下载同一版本的 wheel 体验。[V1.1 独立打包章节](learning-versions/16_v1.1_cli/README.md)
+
 ## 🚀 快速开始
 
 ### 1. 准备环境

@@ -1,0 +1,95 @@
+name: micro-pi CLI
+
+on:
+  pull_request:
+    paths:
+      - 'learning-versions/16_v1.1_cli/**'
+      - '.github/workflows/micro-pi-cli.yml'
+  push:
+    branches:
+      - main
+      - 'codex/**'
+    tags:
+      - v1.1.0
+    paths:
+      - 'learning-versions/16_v1.1_cli/**'
+      - '.github/workflows/micro-pi-cli.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Build the release wheel
+        working-directory: learning-versions/16_v1.1_cli
+        run: |
+          python -m pip install build
+          python -m build --wheel
+          cd dist
+          sha256sum *.whl > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: micro-pi-wheel
+          path: learning-versions/16_v1.1_cli/dist/
+          if-no-files-found: error
+
+  verify:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          name: micro-pi-wheel
+          path: ${{ runner.temp }}/micro-pi-dist
+      - name: Install and run outside the checkout
+        working-directory: ${{ runner.temp }}
+        shell: bash
+        env:
+          PYTHONUTF8: '1'
+        run: |
+          python -m pip install micro-pi-dist/*.whl
+          python -m pip check
+          micro-pi --help
+          micro-pi --version
+          python -m unittest discover -s "$GITHUB_WORKSPACE/learning-versions/16_v1.1_cli/tests" -v
+
+  release:
+    if: github.ref == 'refs/tags/v1.1.0'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: micro-pi-wheel
+          path: release-artifacts
+      - name: Publish the verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum --check SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "micro-pi $GITHUB_REF_NAME" \
+            --notes-file ../learning-versions/16_v1.1_cli/RELEASE.md ./*.whl SHA256SUMS.txt
+        working-directory: release-artifacts

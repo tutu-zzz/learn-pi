@@ -3559,3 +3559,7 @@ Child 的完整轨迹保存在各自 Session，Parent 只记录委托请求和�
 | V1.0 | Micro Pi Core | 已验收：完成核心模块拆分与 Runtime / CLI 分层 |
 
 > 第一轮学习已完成。Streaming、自动重试和更完善的任务恢复可以作为后续独立增强。
+
+## V1.1 — CLI Packaging
+
+结课实战将 V1.0 的 Agent 核心做成可安装的 `micro-pi` 命令。进入独立章节学习配置向导、包资源和 wheel 验收。[打开 V1.1 教程](16_v1.1_cli/README.md)
