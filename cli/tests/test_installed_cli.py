@@ -9,6 +9,7 @@ import sysconfig
 import tempfile
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.metadata import version
 from pathlib import Path
 from threading import Thread
 from unittest.mock import patch
@@ -118,7 +119,7 @@ class InstalledCLITest(unittest.TestCase):
             env=self.env, capture_output=True, encoding="utf-8", timeout=20,
         )
         self.assertEqual(version_result.returncode, 0, version_result.stderr)
-        self.assertEqual(version_result.stdout.strip(), "micro-pi 1.1.0")
+        self.assertEqual(version_result.stdout.strip(), f"micro-pi {version('learn-pi')}")
         missing = self.run_console()
         self.assertEqual(missing.returncode, 1)
         self.assertIn("micro-pi init", missing.stderr)
